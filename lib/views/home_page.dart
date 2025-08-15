@@ -1,9 +1,10 @@
 import 'dart:io';
-
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:archive/archive.dart';
 import 'package:path_provider/path_provider.dart';
@@ -11,8 +12,14 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:open_file/open_file.dart';
+import 'package:video_cutter/controller/isolate_controller.dart';
 import 'package:video_cutter/main.dart';
 import 'package:video_cutter/views/full_screen_video_player.dart';
+import 'package:video_cutter/widgets/custom_enhanced_appbar.dart';
+import 'package:video_cutter/widgets/custom_enhanced_setting_card.dart';
+import 'package:video_cutter/widgets/custom_file_selection_button.dart';
+import 'package:video_cutter/widgets/custom_processing_card.dart';
+import 'package:video_cutter/widgets/custom_video_preview.dart';
 import 'package:video_player/video_player.dart';
 
 class HomePage extends StatefulWidget {
@@ -30,9 +37,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String? _zipPath;
   String? downlaodDirectory;
   late AnimationController _progressController;
-  late Animation<double> _progressAnimation;
   DateTime? _processingStartTime;
   Duration? _videoDuration;
+  bool _isCreatingZip = false; // Add this new state variable
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+  String _currentOperation = '';
+  // ... existing variables ...
+  bool _shouldCancel = false;
 
   @override
   void initState() {
@@ -41,14 +53,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestPermission();
     });
-
-    _progressController = AnimationController(
+    _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
-    );
-
-    _progressAnimation = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _progressController, curve: Curves.easeInOut),
+      duration: const Duration(milliseconds: 1000),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween(begin: 0.95, end: 1.05).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
   }
 
@@ -72,24 +82,56 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       backgroundColor: isDarkMode ? Colors.grey[900] : Colors.grey[50],
       body: CustomScrollView(
         slivers: [
-          _buildEnhancedAppBar(context, isDarkMode, themeProvider),
+          CustomEnhancedAppbar(
+              context: context,
+              isDarkMode: isDarkMode,
+              themeProvider: themeProvider),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20.0),
               child: Column(
                 children: [
-                  _buildEnhancedSettingsCard(context, isDarkMode),
+                  CustomEnhancedSettingCard(
+                    context: context,
+                    isDarkMode: isDarkMode,
+                    secondsController: _secondsController,
+                  ),
                   const SizedBox(height: 20),
 
                   // File Selection Button
-                  _buildFileSelectionButton(context, isDarkMode),
+                  CustomFileSelectionButton(
+                      context: context,
+                      isDarkMode: isDarkMode,
+                      onPressed: () => setState(() => _videoFile = null),
+                      pickVideo: _pickVideo,
+                      videoFile: _videoFile),
                   const SizedBox(height: 20),
 
-                  if (_videoFile != null)
-                    _buildVideoPreview(context, isDarkMode),
+                  if (_videoFile != null && _videoFile!.existsSync())
+                    CustomVideoPreview(
+                      context: context,
+                      isDarkMode: isDarkMode,
+                      formatDuration: _formatDuration,
+                      formatFileSize: _formatFileSize,
+                      showVideoPreview: _showVideoPreview,
+                      videoDuration: _videoDuration,
+                      videoFile: _videoFile,
+                    ),
                   if (_videoFile != null) const SizedBox(height: 20),
 
-                  _buildEnhancedProcessingCard(context, isDarkMode),
+                  CustomProcessingCard(
+                    context: context,
+                    isDarkMode: isDarkMode,
+                    cancelProcess: _cancelProcess,
+                    currentOperation: _currentOperation,
+                    getRemainingTime: _getRemainingTime,
+                    isCreatingZip: _isCreatingZip,
+                    isProcessing: _isProcessing,
+                    progress: _progress,
+                    pulseAnimation: _pulseAnimation,
+                    shouldCancel: _shouldCancel,
+                    splitAndZip: _splitAndZip,
+                  ),
                   const SizedBox(height: 20),
 
                   // const SizedBox(height: 20),
@@ -104,285 +146,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ],
       ),
       floatingActionButton: _buildFloatingActionButton(context),
-    );
-  }
-
-  Widget _buildFileSelectionButton(BuildContext context, bool isDarkMode) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      color: isDarkMode ? Colors.grey[800] : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            ElevatedButton.icon(
-              onPressed: _pickVideo,
-              icon: const Icon(
-                Icons.video_library,
-                color: Colors.white,
-              ),
-              label: const Text(
-                'Select Video File',
-                style: TextStyle(color: Colors.white),
-              ),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 56),
-                backgroundColor: Colors.indigoAccent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
-            if (_videoFile != null) ...[
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.video_file, color: Colors.indigo),
-                title: Text(
-                  _videoFile!.path.split('/').last,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => setState(() => _videoFile = null),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEnhancedAppBar(
-      BuildContext context, bool isDarkMode, ThemeProvider themeProvider) {
-    return SliverAppBar(
-      expandedHeight: 120,
-      pinned: true,
-      floating: true,
-      elevation: 4,
-      backgroundColor: Colors.transparent,
-      flexibleSpace: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: isDarkMode
-                ? [Colors.indigo[900]!, Colors.black]
-                : [Colors.indigoAccent, Colors.blue[100]!],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: const BorderRadius.vertical(
-            bottom: Radius.circular(20),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-      ),
-      title: AnimatedOpacity(
-        opacity: 1.0,
-        duration: const Duration(milliseconds: 300),
-        child: const Text(
-          'VideoCutter',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 24,
-            letterSpacing: 1.2,
-          ),
-        ),
-      ),
-      centerTitle: true,
-      foregroundColor: isDarkMode ? Colors.white : Colors.black,
-      actions: [
-        IconButton(
-          icon: Icon(Icons.info_outline,
-              color: isDarkMode ? Colors.white : Colors.black),
-          onPressed: () => _showAppInfoDialog(context),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(right: 12.0),
-          child: Transform.scale(
-            scale: 0.85,
-            child: Switch.adaptive(
-              value: isDarkMode,
-              onChanged: (value) => themeProvider.toggleTheme(value),
-              activeColor: Colors.indigoAccent,
-              thumbColor: WidgetStatePropertyAll(
-                  isDarkMode ? Colors.white : Colors.indigoAccent),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildVideoPreview(BuildContext context, bool isDarkMode) {
-    return Hero(
-      tag: 'video-preview',
-      child: GestureDetector(
-        onTap: () => _showVideoPreview(context),
-        child: Container(
-          height: 200, // Slightly taller
-          width: double.infinity,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: isDarkMode ? Colors.grey[850] : Colors.grey[100],
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(isDarkMode ? 0.4 : 0.2),
-                blurRadius: 12,
-                spreadRadius: 1,
-                offset: const Offset(0, 6),
-              ),
-            ],
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: isDarkMode
-                  ? [Colors.grey[900]!, Colors.grey[800]!]
-                  : [Colors.grey[200]!, Colors.grey[300]!],
-            ),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Optional: Add a thumbnail placeholder or actual video thumbnail
-              ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
-                  child: Icon(
-                    Icons.videocam,
-                    size: 50,
-                    color: Colors.white.withOpacity(0.3),
-                  ),
-                ),
-              ),
-
-              // Play button with animated effect
-              Center(
-                child: AnimatedContainer(
-                  duration: Duration(milliseconds: 200),
-                  transform: Matrix4.identity()..scale(1.0),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _showVideoPreview(context),
-                      borderRadius: BorderRadius.circular(40),
-                      child: Container(
-                        padding: EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.black.withOpacity(0.5),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.8),
-                            width: 2,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.play_arrow_rounded,
-                          size: 40,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // Bottom info overlay
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
-                    ),
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withOpacity(0.7),
-                      ],
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.video_library_rounded,
-                        size: 18,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _videoFile!.path.split('/').last,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withOpacity(0.8),
-                                blurRadius: 6,
-                                offset: const Offset(0, 1),
-                              )
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      if (_videoFile != null)
-                        Text(
-                          _formatFileSize(_videoFile!.lengthSync()),
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: 12,
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Top right duration badge
-              if (_videoDuration != null)
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      _formatDuration(_videoDuration!),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -403,154 +166,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (bytes < 1024) return '$bytes B';
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
-
-  Widget _buildEnhancedSettingsCard(BuildContext context, bool isDarkMode) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      color: isDarkMode ? Colors.grey[800] : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.settings, color: Colors.indigoAccent),
-                const SizedBox(width: 12),
-                Text(
-                  'Settings',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: isDarkMode ? Colors.white : Colors.black,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _secondsController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'Chunk duration (seconds)',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color: isDarkMode ? Colors.grey[600]! : Colors.grey[300]!,
-                  ),
-                ),
-                filled: true,
-                fillColor: isDarkMode ? Colors.grey[700] : Colors.grey[100],
-                prefixIcon: Icon(Icons.timer, color: Colors.indigoAccent),
-                labelStyle: TextStyle(
-                  color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                ),
-              ),
-              style: TextStyle(
-                color: isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEnhancedProcessingCard(BuildContext context, bool isDarkMode) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      color: isDarkMode ? Colors.grey[800] : Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: _isProcessing
-                    ? null
-                    : LinearGradient(
-                        colors: [
-                          Colors.indigoAccent,
-                          Colors.purpleAccent,
-                        ],
-                      ),
-              ),
-              child: ElevatedButton.icon(
-                onPressed: _isProcessing ? null : _splitAndZip,
-                icon: _isProcessing
-                    ? SizedBox.shrink()
-                    : const Icon(Icons.content_cut, color: Colors.white),
-                label: Text(
-                  _isProcessing ? 'Processing...' : 'Split & Export',
-                  style: const TextStyle(fontSize: 16, color: Colors.white),
-                ),
-                style: ElevatedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 56),
-                  backgroundColor: _isProcessing
-                      ? (isDarkMode ? Colors.grey[700] : Colors.grey[200])
-                      : Colors.transparent,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-            ),
-            if (_isProcessing) ...[
-              const SizedBox(height: 20),
-              Column(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value:
-                          (_progress > 0 && _progress < 1) ? _progress : null,
-                      minHeight: 8,
-                      backgroundColor:
-                          isDarkMode ? Colors.grey[700] : Colors.grey[200],
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        _progress < 1.0 ? Colors.indigoAccent : Colors.green,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${(_progress * 100).toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color:
-                              isDarkMode ? Colors.grey[400] : Colors.grey[600],
-                        ),
-                      ),
-                      Text(
-                        _progress < 1.0 ? 'Processing...' : 'Completed',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _progress < 1.0
-                              ? Colors.indigoAccent
-                              : Colors.green,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildEnhancedDownloadButton(BuildContext context) {
@@ -647,30 +262,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         : 10 / progress; // Fallback
     final remaining = estimatedTotal * (1 - progress);
     return '${remaining.round()} seconds';
-  }
-
-  void _showAppInfoDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('About VideoCutter'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Version: 1.0.0'),
-            SizedBox(height: 8),
-            Text('A powerful tool for splitting videos into chunks.'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showHelpBottomSheet(BuildContext context) {
@@ -849,6 +440,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _isProcessing = true;
       _progress = 0;
       _processingStartTime = DateTime.now();
+      _isCreatingZip = false;
+      _currentOperation = 'Analyzing video...';
     });
 
     try {
@@ -905,6 +498,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             if (newProgress - _progress > 0.01 || newProgress >= 1.0) {
               setState(() {
                 _progress = newProgress;
+                _currentOperation =
+                    'Splitting video (${(_progress * 100).toStringAsFixed(1)}%)';
               });
             }
           }
@@ -912,21 +507,43 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       });
 
       // Run FFmpeg command
+      // final cmd =
+      //     '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -c:v libx264 -c:a aac "$outputPath"';
       final cmd =
-          '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -c copy "$outputPath"';
+          '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -c:v libx264 -preset ultrafast -crf 23 -c:a aac "$outputPath"';
 
       final session = await FFmpegKit.execute(cmd);
+
       final returnCode = await session.getReturnCode();
 
       if (returnCode!.isValueSuccess()) {
-        await _createZip(chunkFolder.path);
+        // await _createZip(chunkFolder.path);
+        setState(() {
+          _isCreatingZip = true;
+          _currentOperation = 'Creating ZIP archive...';
+        });
+
+        await compute(IsolateController().zipInIsolate, chunkFolder.path);
+
+        if (await chunkFolder.exists()) {
+          await chunkFolder.delete(recursive: true);
+        }
+
+        setState(() {
+          _isCreatingZip = false;
+          _currentOperation = 'Completed!';
+          _videoFile = null;
+        });
+
+        _showSuccessDialog(context, chunkFolder.path);
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Video processing failed')),
+            SnackBar(content: Text('Video Processing Canceled')),
           );
         }
       }
+      _clearAppCache();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -938,7 +555,39 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (mounted) {
         setState(() {
           _isProcessing = false;
+          _isCreatingZip = false;
           _progress = 1.0;
+        });
+      }
+    }
+  }
+
+  Future<void> _cancelProcess() async {
+    setState(() {
+      _shouldCancel = true;
+    });
+
+    try {
+      // Cancel the FFmpeg session
+      _currentOperation = 'Cancelling...';
+      _videoFile = null;
+      await FFmpegKit.cancel();
+      debugPrint("Session cancelled");
+
+      // Clean up temporary files
+      final tempDir = await getTemporaryDirectory();
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+        debugPrint("Temporary files cleaned up");
+      }
+    } catch (e) {
+      debugPrint("Error cancelling process: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+          _shouldCancel = false;
+          _progress = 0;
         });
       }
     }
@@ -1044,6 +693,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         ],
       ),
     );
+  }
+
+  Future<void> _clearAppCache() async {
+    try {
+      final cacheDir = await getTemporaryDirectory();
+      if (cacheDir.existsSync()) {
+        cacheDir.deleteSync(recursive: true);
+        debugPrint("✅ Cache cleared: ${cacheDir.path}");
+      }
+    } catch (e) {
+      debugPrint("⚠️ Error clearing cache: $e");
+    }
   }
 
   // Color _getProgressColor(double progress) {
