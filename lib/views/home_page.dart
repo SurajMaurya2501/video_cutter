@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
 import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +11,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:open_file/open_file.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_cutter/controller/isolate_controller.dart';
 import 'package:video_cutter/main.dart';
 import 'package:video_cutter/views/full_screen_video_player.dart';
@@ -62,15 +62,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  @override
-  void dispose() {
-    _progressController.dispose();
-    super.dispose();
-  }
-
   Future<void> _requestPermission() async {
     await Permission.videos.request();
     await Permission.storage.request();
+    await Permission.notification.request();
   }
 
   @override
@@ -444,6 +439,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _currentOperation = 'Analyzing video...';
     });
 
+    final shared = await SharedPreferences.getInstance();
+    await shared.setString("videoPath", _videoFile!.path);
+    await shared.setString("chunkSeconds", _secondsController.text.trim());
+
     try {
       // Get the Downloads directory
       Directory? downloadsDir;
@@ -509,9 +508,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       // Run FFmpeg command
       // final cmd =
       //     '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -c:v libx264 -c:a aac "$outputPath"';
+      // final cmd =
+      //     '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -c:v libx264 -preset ultrafast -crf 23 -c:a aac "$outputPath"';
+      // final cmd =
+      //     '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -c copy "$outputPath"';
       final cmd =
-          '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -c:v libx264 -preset ultrafast -crf 23 -c:a aac "$outputPath"';
-
+          '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -map 0 -c copy -movflags +faststart "$outputPath"';
       final session = await FFmpegKit.execute(cmd);
 
       final returnCode = await session.getReturnCode();
