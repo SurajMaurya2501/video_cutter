@@ -1,11 +1,11 @@
+import 'dart:developer';
 import 'dart:io';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
-import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_video/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_video/ffmpeg_kit_config.dart';
+import 'package:ffmpeg_kit_flutter_new_video/ffprobe_kit.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:archive/archive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +19,7 @@ import 'package:video_cutter/widgets/custom_enhanced_appbar.dart';
 import 'package:video_cutter/widgets/custom_enhanced_setting_card.dart';
 import 'package:video_cutter/widgets/custom_file_selection_button.dart';
 import 'package:video_cutter/widgets/custom_processing_card.dart';
+import 'package:video_cutter/widgets/custom_toggle_widget.dart';
 import 'package:video_cutter/widgets/custom_video_preview.dart';
 import 'package:video_player/video_player.dart';
 
@@ -33,10 +34,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final TextEditingController _secondsController = TextEditingController();
   File? _videoFile;
   bool _isProcessing = false;
-  double _progress = 0;
   String? _zipPath;
   String? downlaodDirectory;
-  late AnimationController _progressController;
   DateTime? _processingStartTime;
   Duration? _videoDuration;
   bool _isCreatingZip = false; // Add this new state variable
@@ -45,6 +44,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   String _currentOperation = '';
   // ... existing variables ...
   bool _shouldCancel = false;
+  double progress = 0.0;
+  bool _highQualityMode = false;
 
   @override
   void initState() {
@@ -53,6 +54,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _requestPermission();
     });
+
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
@@ -91,9 +93,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     isDarkMode: isDarkMode,
                     secondsController: _secondsController,
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
 
-                  // File Selection Button
+                  QualityToggleCard(
+                    initialValue: false, // Default to fast mode
+                    onChanged: (isHighQuality) {
+                      // Update your FFmpeg command generation logic
+                      setState(() {
+                        _highQualityMode = isHighQuality;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 10),
+
                   CustomFileSelectionButton(
                       context: context,
                       isDarkMode: isDarkMode,
@@ -122,7 +134,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     getRemainingTime: _getRemainingTime,
                     isCreatingZip: _isCreatingZip,
                     isProcessing: _isProcessing,
-                    progress: _progress,
+                    progress: progress,
                     pulseAnimation: _pulseAnimation,
                     shouldCancel: _shouldCancel,
                     splitAndZip: _splitAndZip,
@@ -252,11 +264,23 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   String _getRemainingTime(double progress) {
     if (progress <= 0) return 'Calculating...';
+
     final estimatedTotal = _processingStartTime != null
         ? DateTime.now().difference(_processingStartTime!).inSeconds / progress
         : 10 / progress; // Fallback
-    final remaining = estimatedTotal * (1 - progress);
-    return '${remaining.round()} seconds';
+
+    final remainingSeconds = estimatedTotal * (1 - progress);
+    final remaining = remainingSeconds.round();
+
+    if (remaining > 60) {
+      final minutes = remaining ~/ 60;
+      final seconds = remaining % 60;
+      return '$minutes min ${seconds.toString().padLeft(2, '0')} sec';
+    } else if (remaining > 10) {
+      return '$remaining sec';
+    } else {
+      return 'Almost done';
+    }
   }
 
   void _showHelpBottomSheet(BuildContext context) {
@@ -433,7 +457,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
     setState(() {
       _isProcessing = true;
-      _progress = 0;
+      progress = 0;
       _processingStartTime = DateTime.now();
       _isCreatingZip = false;
       _currentOperation = 'Analyzing video...';
@@ -442,6 +466,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final shared = await SharedPreferences.getInstance();
     await shared.setString("videoPath", _videoFile!.path);
     await shared.setString("chunkSeconds", _secondsController.text.trim());
+    await shared.setBool("isProcessing", true);
 
     try {
       // Get the Downloads directory
@@ -471,6 +496,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ? _videoFile!.path.split(Platform.pathSeparator).last.split('.').first
           : 'video';
       final chunkFolder = Directory('${downloadsDir.path}/${baseName}_chunks');
+      _zipPath = chunkFolder.path;
       if (!(await chunkFolder.exists())) {
         await chunkFolder.create(recursive: true);
       }
@@ -494,11 +520,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           final time = statistics.getTime();
           if (time > 0) {
             final newProgress = (time / videoDuration).clamp(0.0, 1.0);
-            if (newProgress - _progress > 0.01 || newProgress >= 1.0) {
+            if (newProgress - progress > 0.01 || newProgress >= 1.0) {
               setState(() {
-                _progress = newProgress;
+                progress = newProgress;
                 _currentOperation =
-                    'Splitting video (${(_progress * 100).toStringAsFixed(1)}%)';
+                    'Splitting video (${(progress * 100).toStringAsFixed(1)}%)';
               });
             }
           }
@@ -512,8 +538,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       //     '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -c:v libx264 -preset ultrafast -crf 23 -c:a aac "$outputPath"';
       // final cmd =
       //     '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -c copy "$outputPath"';
-      final cmd =
-          '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -map 0 -c copy -movflags +faststart "$outputPath"';
+      final cmd = _highQualityMode
+          ? '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -c:v libx264 -preset ultrafast -crf 23 -c:a aac "$outputPath"'
+          : '-i "${_videoFile!.path}" -f segment -segment_time $chunkSeconds -reset_timestamps 1 -map 0 -c copy -movflags +faststart "$outputPath"';
       final session = await FFmpegKit.execute(cmd);
 
       final returnCode = await session.getReturnCode();
@@ -540,12 +567,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         _showSuccessDialog(context, chunkFolder.path);
       } else {
         if (mounted) {
+          _videoFile = null;
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Video Processing Canceled')),
+            SnackBar(content: Text('Video Format Not Supported')),
           );
         }
       }
       _clearAppCache();
+      await shared.setBool("isProcessing", false);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -558,7 +587,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         setState(() {
           _isProcessing = false;
           _isCreatingZip = false;
-          _progress = 1.0;
+          progress = 1.0;
         });
       }
     }
@@ -589,41 +618,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         setState(() {
           _isProcessing = false;
           _shouldCancel = false;
-          _progress = 0;
+          progress = 0;
         });
       }
-    }
-  }
-
-  Future<void> _createZip(String dirPath) async {
-    final Directory dir = Directory(dirPath);
-    final List<File> chunkFiles = dir
-        .listSync()
-        .where((file) => file.path.contains('output_'))
-        .map((e) => File(e.path))
-        .toList();
-
-    final Archive archive = Archive();
-    for (final file in chunkFiles) {
-      archive.addFile(ArchiveFile(
-        file.path.split('/').last,
-        file.lengthSync(),
-        file.readAsBytesSync(),
-      ));
-    }
-
-    final zipBytes = ZipEncoder().encode(archive);
-    // Use the original video file name (without extension) for the zip name
-    String baseName = _videoFile != null
-        ? _videoFile!.path.split(Platform.pathSeparator).last.split('.').first
-        : 'video';
-    final zipPath = '$dirPath/${baseName}_chunks.zip';
-    await File(zipPath).writeAsBytes(zipBytes!);
-
-    setState(() => _zipPath = zipPath);
-    // Show dialog immediately after zip is created
-    if (mounted) {
-      _showSuccessDialog(context, zipPath);
     }
   }
 
@@ -631,10 +628,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     if (_zipPath == null) return;
 
     try {
-      final result = await Share.shareXFiles(
-        [XFile(_zipPath!)],
-        text: 'Here are my video chunks created with VideoCutter!',
-        subject: 'Video Chunks',
+      final result = await SharePlus.instance.share(
+        ShareParams(
+            files: [XFile(_zipPath!)],
+            text: 'Here are my video chunks created with VideoCutter!',
+            subject: 'Video Chunks'),
       );
 
       if (result.status == ShareResultStatus.success) {
@@ -643,6 +641,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         );
       }
     } catch (e) {
+      log(e.toString());
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error sharing: ${e.toString()}')),
       );
@@ -652,47 +651,173 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void _showSuccessDialog(BuildContext context, String path) {
     final fileName = path.split('/').last;
     final dirPath = path.substring(0, path.lastIndexOf('/'));
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green),
-            SizedBox(width: 10),
-            Text('Operation Complete'),
-          ],
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.0),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Saved as: $fileName'),
-            const SizedBox(height: 10),
-            Text('Location: Downloads folder',
-                style: TextStyle(color: Colors.grey[600])),
-          ],
+        elevation: 4,
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.check_circle_rounded,
+                      color: Colors.green.shade700, size: 32),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Download Completed!',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: isDarkMode ? Colors.white : Colors.grey.shade800,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color:
+                      isDarkMode ? Colors.grey.shade800 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'File saved successfully',
+                      style: TextStyle(
+                        color:
+                            isDarkMode ? Colors.white70 : Colors.grey.shade600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.insert_drive_file,
+                            size: 20, color: Colors.blue.shade400),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'File Name:',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDarkMode
+                                      ? Colors.white54
+                                      : Colors.grey.shade600,
+                                ),
+                              ),
+                              Text(
+                                fileName,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  color: isDarkMode
+                                      ? Colors.white
+                                      : Colors.grey.shade800,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.folder,
+                            size: 20, color: Colors.orange.shade400),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Location:',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDarkMode
+                                      ? Colors.white54
+                                      : Colors.grey.shade600,
+                                ),
+                              ),
+                              Text(
+                                dirPath,
+                                style: TextStyle(
+                                  color: isDarkMode
+                                      ? Colors.white70
+                                      : Colors.grey.shade700,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      foregroundColor:
+                          isDarkMode ? Colors.white70 : Colors.grey.shade700,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Dismiss'),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.blue,
+                      side: BorderSide(color: Colors.blue.shade300),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                    ),
+                    onPressed: () {
+                      Navigator.pop(context);
+                      _shareResult();
+                    },
+                    child: const Text('Share'),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue.shade600,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
+                    ),
+                    onPressed: () async {
+                      await OpenFile.open(dirPath);
+                    },
+                    child: const Text('Open Folder'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _shareResult();
-            },
-            child: const Text('Share'),
-          ),
-          TextButton(
-            onPressed: () async {
-              // Open the directory using open_file
-              await OpenFile.open(dirPath);
-            },
-            child: const Text('Open Directory'),
-          ),
-        ],
       ),
     );
   }

@@ -5,7 +5,7 @@
 import FlutterMacOS
 import Foundation
 
-import ffmpeg_kit_flutter_new
+import ffmpeg_kit_flutter_new_video
 import file_picker
 import flutter_local_notifications
 import open_file_mac

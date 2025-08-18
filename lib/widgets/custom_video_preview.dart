@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 class CustomVideoPreview extends StatelessWidget {
@@ -10,34 +9,37 @@ class CustomVideoPreview extends StatelessWidget {
   final String Function(int) formatFileSize;
   final Duration? videoDuration;
   final String Function(Duration duration) formatDuration;
+  final String? resolution; // Add resolution parameter
 
-  const CustomVideoPreview(
-      {required this.videoDuration,
-      required this.context,
-      required this.formatFileSize,
-      required this.isDarkMode,
-      required this.showVideoPreview,
-      required this.videoFile,
-      required this.formatDuration,
-      super.key});
+  const CustomVideoPreview({
+    required this.videoDuration,
+    required this.context,
+    required this.formatFileSize,
+    required this.isDarkMode,
+    required this.showVideoPreview,
+    required this.videoFile,
+    required this.formatDuration,
+    this.resolution,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Hero(
-      tag: 'video-preview',
+      tag: 'video-preview-${videoFile?.path}',
       child: GestureDetector(
         onTap: () => showVideoPreview(context),
         child: Container(
-          height: 200, // Slightly taller
-          width: double.infinity,
+          height: 200,
+          width: MediaQuery.sizeOf(context).width * 0.8,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: isDarkMode ? Colors.grey[850] : Colors.grey[100],
+            borderRadius: BorderRadius.circular(18),
+            color: isDarkMode ? Colors.grey[900] : Colors.grey[100],
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(isDarkMode ? 0.4 : 0.2),
-                blurRadius: 12,
-                spreadRadius: 1,
+                color: Colors.black.withOpacity(isDarkMode ? 0.5 : 0.2),
+                blurRadius: 15,
+                spreadRadius: 2,
                 offset: const Offset(0, 6),
               ),
             ],
@@ -52,23 +54,48 @@ class CustomVideoPreview extends StatelessWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // Optional: Add a thumbnail placeholder or actual video thumbnail
+              // Thumbnail container with shimmer effect
               ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
                 child: Container(
-                  color: isDarkMode ? Colors.grey[800] : Colors.grey[300],
-                  child: Icon(
-                    Icons.videocam,
-                    size: 50,
-                    color: Colors.white.withOpacity(0.3),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
+                        isDarkMode ? Colors.grey[700]! : Colors.grey[400]!,
+                      ],
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      Center(
+                        child: Icon(
+                          Icons.play_circle_filled_rounded,
+                          size: 60,
+                          color: Colors.white.withOpacity(0.2),
+                        ),
+                      ),
+                      // Add your actual video thumbnail here if available
+                    ],
                   ),
                 ),
               ),
 
-              // Play button with animated effect
+              // Glossy overlay effect
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  color: Colors.blueAccent,
+                ),
+              ),
+
+              // Play button with pulse animation
               Center(
                 child: AnimatedContainer(
-                  duration: Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeInOut,
                   transform: Matrix4.identity()..scale(1.0),
                   child: Material(
                     color: Colors.transparent,
@@ -76,18 +103,25 @@ class CustomVideoPreview extends StatelessWidget {
                       onTap: () => showVideoPreview(context),
                       borderRadius: BorderRadius.circular(40),
                       child: Container(
-                        padding: EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: Colors.black.withOpacity(0.5),
+                          color: Colors.black.withOpacity(0.6),
                           border: Border.all(
-                            color: Colors.white.withOpacity(0.8),
-                            width: 2,
+                            color: Colors.white.withOpacity(0.9),
+                            width: 2.5,
                           ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.4),
+                              blurRadius: 15,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.play_arrow_rounded,
-                          size: 40,
+                          size: 42,
                           color: Colors.white,
                         ),
                       ),
@@ -96,85 +130,150 @@ class CustomVideoPreview extends StatelessWidget {
                 ),
               ),
 
-              // Bottom info overlay
+              // Bottom info panel
               Positioned(
                 bottom: 0,
                 left: 0,
                 right: 0,
                 child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.only(
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(18),
+                      bottomRight: Radius.circular(18),
                     ),
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: [
                         Colors.transparent,
-                        Colors.black.withOpacity(0.7),
+                        Colors.black.withOpacity(0.8),
                       ],
                     ),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        Icons.video_library_rounded,
-                        size: 18,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          videoFile!.path.split('/').last,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black.withOpacity(0.8),
-                                blurRadius: 6,
-                                offset: const Offset(0, 1),
-                              )
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      // File name
+                      Text(
+                        videoFile?.path.split('/').last ?? 'Untitled',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withOpacity(0.8),
+                              blurRadius: 8,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      if (videoFile != null)
-                        Text(
-                          formatFileSize(videoFile!.lengthSync()),
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.8),
-                            fontSize: 12,
-                          ),
-                        ),
+                      const SizedBox(height: 6),
+                      // Metadata row
+                      Row(
+                        children: [
+                          // Resolution badge
+                          if (resolution != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[700]?.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                resolution!,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          if (resolution != null) const SizedBox(width: 8),
+                          // Duration
+                          if (videoDuration != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[800]?.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                formatDuration(videoDuration!),
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          const Spacer(),
+                          // File size
+                          if (videoFile != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.green[700]?.withOpacity(0.8),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                formatFileSize(videoFile!.lengthSync()),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ),
 
-              // Top right duration badge
-              if (videoDuration != null)
+              // Top right quality indicator
+              if (resolution != null)
                 Positioned(
                   top: 12,
                   right: 12,
                   child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      formatDuration(videoDuration!),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1,
                       ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.hd_rounded,
+                          size: 16,
+                          color: Colors.amber[300],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'HD',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

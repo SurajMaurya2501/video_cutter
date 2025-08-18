@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:video_cutter/controller/notification_service.dart';
 import 'package:video_cutter/views/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Initialize notification service
-  await NotificationService.initialize();
 
   runApp(
     ChangeNotifierProvider(
