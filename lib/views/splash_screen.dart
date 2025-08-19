@@ -58,11 +58,11 @@ class _SplashScreenState extends State<SplashScreen>
               children: [
                 // App logo
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(32),
+                  borderRadius: BorderRadius.circular(20),
                   child: Image.asset(
-                    "assets/video_cutter.png", // Use your generated logo here
-                    height: 120,
-                    width: 120,
+                    "assets/movie_slicer.jpeg", // Use your generated logo here
+                    height: 80,
+                    width: 80,
                   ),
                 ),
               ],

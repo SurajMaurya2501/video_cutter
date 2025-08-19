@@ -67,7 +67,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Future<void> _requestPermission() async {
     await Permission.videos.request();
     await Permission.storage.request();
-    await Permission.notification.request();
   }
 
   @override
@@ -141,6 +140,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   ),
                   const SizedBox(height: 20),
 
+                  if (_zipPath != null) _buildCreateZipButton(context)
+
                   // const SizedBox(height: 20),
                   // if (_zipPath != null) ...[
                   //   const SizedBox(height: 24),
@@ -175,83 +176,135 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
-  Widget _buildEnhancedDownloadButton(BuildContext context) {
+// The main conditional widget to switch between button and progress UI
+  Widget _buildCreateZipButton(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 25, right: 25, bottom: 25),
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 500),
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return ScaleTransition(
+            scale: animation,
+            child: child,
+          );
+        },
+        child: _isCreatingZip
+            ? _buildProcessingUI() // Show processing UI
+            : _buildButtonUI(), // Show the button
+      ),
+    );
+  }
+
+// Enhanced UI for the loading progress
+  Widget _buildProcessingUI() {
     return Column(
+      key: const ValueKey('processingUI'),
       children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              if (!_isProcessing)
-                BoxShadow(
-                  color: Colors.green.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-            ],
-          ),
-          child: ElevatedButton.icon(
-            onPressed: _isProcessing
-                ? null
-                : () async {
-                    // await _downloadZip();
-                    if (downlaodDirectory != null) {
-                      _showSuccessDialog(context, downlaodDirectory!);
-                    }
-                  },
-            icon: const Icon(Icons.download, color: Colors.white),
-            label: const Text(
-              'Download',
-              style: TextStyle(fontSize: 16, color: Colors.white),
-            ),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 56),
-              backgroundColor:
-                  _isProcessing ? Colors.green.withOpacity(0.7) : Colors.green,
-              shape: RoundedRectangleBorder(
+        Stack(
+          alignment: Alignment.center,
+          children: [
+            SizedBox(
+              height: 56,
+              child: LinearProgressIndicator(
+                backgroundColor: Colors.grey[300],
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
                 borderRadius: BorderRadius.circular(12),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 16),
             ),
-          ),
+            Text(
+              '${(progress * 100).toStringAsFixed(0)}%',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              if (!_isProcessing)
-                BoxShadow(
-                  color: Colors.blue.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-            ],
-          ),
-          child: ElevatedButton.icon(
-            onPressed:
-                _isProcessing || _zipPath == null ? null : () => _shareResult(),
-            icon: const Icon(Icons.share, color: Colors.white),
-            label: const Text(
-              'Share Result',
-              style: TextStyle(fontSize: 16, color: Colors.white),
-            ),
-            style: ElevatedButton.styleFrom(
-              minimumSize: const Size(double.infinity, 56),
-              backgroundColor:
-                  _isProcessing ? Colors.blue.withOpacity(0.7) : Colors.blue,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-          ),
+        Text(
+          _currentOperation,
+          style: const TextStyle(fontSize: 14, color: Colors.black54),
+          textAlign: TextAlign.center,
         ),
       ],
     );
   }
+
+// This remains the same as before
+  Widget _buildButtonUI() {
+    return ElevatedButton.icon(
+      key: const ValueKey('createZipButton'),
+      onPressed: _isCreatingZip
+          ? null
+          : () async {
+              if (_zipPath != null) {
+                createZipAndDownload();
+              }
+            },
+      icon: const Icon(Icons.download, color: Colors.white),
+      label: const Text(
+        'Create Zip',
+        style: TextStyle(fontSize: 16, color: Colors.white),
+      ),
+      style: ElevatedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 56),
+        backgroundColor: Colors.green,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+      ),
+    );
+  } // Widget _buildCreateZipButton(BuildContext context) {
+  //   return Padding(
+  //     padding: const EdgeInsets.symmetric(horizontal: 25),
+  //     child: Column(
+  //       children: [
+  //         AnimatedContainer(
+  //           duration: const Duration(milliseconds: 300),
+  //           decoration: BoxDecoration(
+  //             borderRadius: BorderRadius.circular(12),
+  //             boxShadow: [
+  //               if (!_isProcessing)
+  //                 BoxShadow(
+  //                   color: Colors.green.withOpacity(0.3),
+  //                   blurRadius: 10,
+  //                   offset: const Offset(0, 4),
+  //                 ),
+  //             ],
+  //           ),
+  //           child: ElevatedButton.icon(
+  //             onPressed: _isProcessing
+  //                 ? null
+  //                 : () async {
+  //                     // await _downloadZip();
+  //                     if (downlaodDirectory != null) {
+  //                       createZipAndDownload();
+  //                     }
+  //                   },
+  //             icon: const Icon(Icons.download, color: Colors.white),
+  //             label: const Text(
+  //               'Create Zip',
+  //               style: TextStyle(fontSize: 16, color: Colors.white),
+  //             ),
+  //             style: ElevatedButton.styleFrom(
+  //               minimumSize: const Size(double.infinity, 56),
+  //               backgroundColor: _isProcessing
+  //                   ? Colors.green.withOpacity(0.7)
+  //                   : Colors.green,
+  //               shape: RoundedRectangleBorder(
+  //                 borderRadius: BorderRadius.circular(12),
+  //               ),
+  //               padding: const EdgeInsets.symmetric(vertical: 16),
+  //             ),
+  //           ),
+  //         ),
+  //         const SizedBox(height: 16),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _buildFloatingActionButton(BuildContext context) {
     return FloatingActionButton(
@@ -259,6 +312,50 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       child: const Icon(Icons.help_outline),
       backgroundColor: Colors.indigoAccent,
       foregroundColor: Colors.white,
+    );
+  }
+
+  void _zipCreatedDialog(BuildContext context, String zipFilePath) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Prevents closing by tapping outside
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20.0),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Colors.green),
+              SizedBox(width: 8),
+              Text('Success!'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Your video chunks have been successfully zipped.',
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'File saved to:\n$zipFilePath.zip',
+                style: const TextStyle(color: Colors.black54),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -459,7 +556,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _isProcessing = true;
       progress = 0;
       _processingStartTime = DateTime.now();
-      _isCreatingZip = false;
       _currentOperation = 'Analyzing video...';
     });
 
@@ -546,25 +642,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       final returnCode = await session.getReturnCode();
 
       if (returnCode!.isValueSuccess()) {
-        // await _createZip(chunkFolder.path);
-        setState(() {
-          _isCreatingZip = true;
-          _currentOperation = 'Creating ZIP archive...';
-        });
-
-        await compute(IsolateController().zipInIsolate, chunkFolder.path);
-
-        if (await chunkFolder.exists()) {
-          await chunkFolder.delete(recursive: true);
-        }
-
-        setState(() {
-          _isCreatingZip = false;
-          _currentOperation = 'Completed!';
-          _videoFile = null;
-        });
-
         _showSuccessDialog(context, chunkFolder.path);
+        _videoFile = null;
+        setState(() {});
       } else {
         if (mounted) {
           _videoFile = null;
@@ -586,11 +666,32 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       if (mounted) {
         setState(() {
           _isProcessing = false;
-          _isCreatingZip = false;
           progress = 1.0;
         });
       }
     }
+  }
+
+  Future<void> createZipAndDownload() async {
+    if (_zipPath == null) return;
+    setState(() {
+      _isCreatingZip = true;
+    });
+
+    final chunkFolder = Directory(_zipPath!);
+
+    await compute(IsolateController().zipInIsolate, chunkFolder.path);
+    _zipCreatedDialog(context, chunkFolder.path);
+
+    if (await chunkFolder.exists()) {
+      await chunkFolder.delete(recursive: true);
+    }
+
+    setState(() {
+      _isCreatingZip = false;
+      _videoFile = null;
+      _zipPath = null;
+    });
   }
 
   Future<void> _cancelProcess() async {
