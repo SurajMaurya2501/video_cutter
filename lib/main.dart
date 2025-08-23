@@ -21,7 +21,7 @@ class MyApp extends StatelessWidget {
     final themeProvider = Provider.of<ThemeProvider>(context);
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'VideoCutter',
+      title: 'MovieSlicer',
       theme: ThemeData.light().copyWith(
         primaryColor: const Color(0xFF3F51B5),
         colorScheme: ColorScheme.light(primary: const Color(0xFF3F51B5)),

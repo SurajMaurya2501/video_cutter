@@ -44,7 +44,7 @@ class CustomEnhancedAppbar extends StatelessWidget {
         opacity: 1.0,
         duration: const Duration(milliseconds: 300),
         child: const Text(
-          'VideoCutter',
+          'MovieSlicer',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 24,
@@ -81,7 +81,7 @@ class CustomEnhancedAppbar extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('About VideoCutter'),
+        title: const Text('About MovieSlicer'),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,8 +1,8 @@
 import 'dart:developer';
 import 'dart:io';
-import 'package:ffmpeg_kit_flutter_new_video/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_video/ffmpeg_kit_config.dart';
-import 'package:ffmpeg_kit_flutter_new_video/ffprobe_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
+import 'package:ffmpeg_kit_flutter_new/ffprobe_kit.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -51,9 +51,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void initState() {
     super.initState();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _requestPermission();
-    });
+    _requestPermission();
 
     _pulseController = AnimationController(
       vsync: this,
@@ -65,8 +63,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _requestPermission() async {
-    await Permission.videos.request();
-    await Permission.storage.request();
+    await Permission.manageExternalStorage.request();
   }
 
   @override
@@ -619,8 +616,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             if (newProgress - progress > 0.01 || newProgress >= 1.0) {
               setState(() {
                 progress = newProgress;
-                _currentOperation =
-                    'Splitting video (${(progress * 100).toStringAsFixed(1)}%)';
+                // _currentOperation =
+                //     'Creating zip (${(progress * 99).toStringAsFixed(1)}%)';
               });
             }
           }
@@ -732,7 +729,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       final result = await SharePlus.instance.share(
         ShareParams(
             files: [XFile(_zipPath!)],
-            text: 'Here are my video chunks created with VideoCutter!',
+            text: 'Here are my video chunks created with MovieSlicer!',
             subject: 'Video Chunks'),
       );
 
