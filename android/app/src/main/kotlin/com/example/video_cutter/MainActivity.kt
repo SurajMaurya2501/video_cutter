@@ -1,4 +1,4 @@
-package com.example.video_cutter
+package com.surajmaurya.movieslicer
 
 import io.flutter.embedding.android.FlutterActivity
 
