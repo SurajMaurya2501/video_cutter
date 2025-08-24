@@ -63,7 +63,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _requestPermission() async {
-    await Permission.manageExternalStorage.request();
+    await Permission.videos.request();
   }
 
   @override

@@ -193,7 +193,7 @@ class _QualityToggleCardState extends State<QualityToggleCard> {
               duration: _animationDuration,
               child: Text(
                 _highQualityMode
-                    ? '✓ Better compression quality\n✓ Smaller file size\n✓ Slower processing'
+                    ? '✓ Better compression quality\n✓ Slower processing'
                     : '✓ Faster processing\n✓ Medium quality\n✓ Original file size',
                 style: Theme.of(context).textTheme.bodySmall,
                 key: ValueKey<bool>(_highQualityMode),
