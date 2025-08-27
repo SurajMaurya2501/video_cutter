@@ -22,6 +22,7 @@ import 'package:video_cutter/widgets/custom_processing_card.dart';
 import 'package:video_cutter/widgets/custom_toggle_widget.dart';
 import 'package:video_cutter/widgets/custom_video_preview.dart';
 import 'package:video_player/video_player.dart';
+import 'package:media_scanner/media_scanner.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -907,7 +908,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           horizontal: 16, vertical: 8),
                     ),
                     onPressed: () async {
-                      await OpenFile.open(dirPath);
+                      await MediaScanner.loadMedia(path: path);
+                      await OpenFile.open(path);
                     },
                     child: const Text('Open Folder'),
                   ),
