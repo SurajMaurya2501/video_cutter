@@ -14,7 +14,6 @@ import 'package:open_file/open_file.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:video_cutter/controller/isolate_controller.dart';
 import 'package:video_cutter/main.dart';
-import 'package:video_cutter/views/full_screen_video_player.dart';
 import 'package:video_cutter/widgets/custom_enhanced_appbar.dart';
 import 'package:video_cutter/widgets/custom_enhanced_setting_card.dart';
 import 'package:video_cutter/widgets/custom_file_selection_button.dart';
@@ -50,6 +49,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late VideoPlayerController videoController;
 
   @override
+  void dispose() {
+    videoController.dispose();
+    super.dispose();
+  }
+
+  @override
   void initState() {
     super.initState();
     _requestPermission();
@@ -65,11 +70,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   Future<void> _requestPermission() async {
     await Permission.videos.request();
-  }
-
-  void initializeThemeMode({required BuildContext context}) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    themeProvider.getThemeMode();
   }
 
   @override
@@ -111,51 +111,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   CustomFileSelectionButton(
                       context: context,
                       isDarkMode: isDarkMode,
-                      onPressed: () => setState(() => _videoFile = null),
+                      onPressed: () {
+                        setState(() {
+                          videoController.pause();
+                          _videoFile = null;
+                        });
+                      },
                       pickVideo: _pickVideo,
                       videoFile: _videoFile),
                   const SizedBox(height: 20),
 
                   if (_videoFile != null && _videoFile!.existsSync())
-                    // CustomVideoPreview(
-                    //   context: context,
-                    //   isDarkMode: isDarkMode,
-                    //   formatDuration: _formatDuration,
-                    //   formatFileSize: _formatFileSize,
-                    //   showVideoPreview: _showVideoPreview,
-                    //   videoDuration: _videoDuration,
-                    //   videoFile: _videoFile,
-                    // ),
-
-                    Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        GestureDetector(
-                          onTap: () {
-                            setState(() {
-                              videoController.value.isPlaying
-                                  ? videoController.pause()
-                                  : videoController.play();
-                            });
-                          },
-                          child: Center(
-                            child: videoController.value.isInitialized
-                                ? AspectRatio(
-                                    aspectRatio:
-                                        videoController.value.aspectRatio,
-                                    child: VideoPlayer(videoController),
-                                  )
-                                : Container(),
-                          ),
-                        ),
-                        videoController.value.isPlaying == false
-                            ? Icon(
-                                Icons.play_circle_sharp,
-                                size: 50,
-                              )
-                            : SizedBox.shrink()
-                      ],
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          log(videoController.value.aspectRatio.toString());
+                          videoController.value.isPlaying
+                              ? videoController.pause()
+                              : videoController.play();
+                        });
+                      },
+                      child: CustomVideoPreview(
+                        videoDuration: _videoDuration,
+                        videoFile: _videoFile,
+                        videoController: videoController,
+                      ),
                     ),
+
                   if (_videoFile != null) const SizedBox(height: 20),
 
                   CustomProcessingCard(
@@ -508,6 +490,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           videoController = VideoPlayerController.file(
             _videoFile!,
           )..initialize();
+
           _videoDuration = duration; // Store the duration
           _zipPath = null; // Reset previous results
         });
