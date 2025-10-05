@@ -47,11 +47,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   bool _shouldCancel = false;
   double progress = 0.0;
   bool _highQualityMode = false;
+  late VideoPlayerController videoController;
 
   @override
   void initState() {
     super.initState();
-
     _requestPermission();
 
     _pulseController = AnimationController(
@@ -65,6 +65,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   Future<void> _requestPermission() async {
     await Permission.videos.request();
+  }
+
+  void initializeThemeMode({required BuildContext context}) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    themeProvider.getThemeMode();
   }
 
   @override
@@ -112,14 +117,44 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   const SizedBox(height: 20),
 
                   if (_videoFile != null && _videoFile!.existsSync())
-                    CustomVideoPreview(
-                      context: context,
-                      isDarkMode: isDarkMode,
-                      formatDuration: _formatDuration,
-                      formatFileSize: _formatFileSize,
-                      showVideoPreview: _showVideoPreview,
-                      videoDuration: _videoDuration,
-                      videoFile: _videoFile,
+                    // CustomVideoPreview(
+                    //   context: context,
+                    //   isDarkMode: isDarkMode,
+                    //   formatDuration: _formatDuration,
+                    //   formatFileSize: _formatFileSize,
+                    //   showVideoPreview: _showVideoPreview,
+                    //   videoDuration: _videoDuration,
+                    //   videoFile: _videoFile,
+                    // ),
+
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              videoController.value.isPlaying
+                                  ? videoController.pause()
+                                  : videoController.play();
+                            });
+                          },
+                          child: Center(
+                            child: videoController.value.isInitialized
+                                ? AspectRatio(
+                                    aspectRatio:
+                                        videoController.value.aspectRatio,
+                                    child: VideoPlayer(videoController),
+                                  )
+                                : Container(),
+                          ),
+                        ),
+                        videoController.value.isPlaying == false
+                            ? Icon(
+                                Icons.play_circle_sharp,
+                                size: 50,
+                              )
+                            : SizedBox.shrink()
+                      ],
                     ),
                   if (_videoFile != null) const SizedBox(height: 20),
 
@@ -427,37 +462,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  void _showVideoPreview(BuildContext context) {
-    if (_videoFile == null) return;
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => Scaffold(
-          backgroundColor: Colors.black,
-          appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            iconTheme: const IconThemeData(color: Colors.white),
-            title: Text(
-              _videoFile!.path.split('/').last,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          body: Center(
-            child: Hero(
-              tag: 'video-preview',
-              child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: FullScreenVideoPlayer(videoFile: _videoFile!),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildHelpItem(BuildContext context,
       {required IconData icon, required String text}) {
     return Padding(
@@ -473,13 +477,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Future<void> _pickVideo() async {
-    bool storagePermission = await Permission.manageExternalStorage.isGranted;
-
     bool videos = await Permission.videos.isGranted;
 
-    bool externalStorage = await Permission.manageExternalStorage.isGranted;
-
-    if (!storagePermission || !videos || !externalStorage) {
+    if (!videos) {
       _requestPermission();
     }
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -505,6 +505,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
         setState(() {
           _videoFile = File(path);
+          videoController = VideoPlayerController.file(
+            _videoFile!,
+          )..initialize();
           _videoDuration = duration; // Store the duration
           _zipPath = null; // Reset previous results
         });

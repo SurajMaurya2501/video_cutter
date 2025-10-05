@@ -87,7 +87,7 @@ class CustomVideoPreview extends StatelessWidget {
               Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  color: Colors.blueAccent,
+                  color: Colors.black,
                 ),
               ),
 
@@ -121,7 +121,7 @@ class CustomVideoPreview extends StatelessWidget {
                         ),
                         child: const Icon(
                           Icons.play_arrow_rounded,
-                          size: 42,
+                          size: 30,
                           color: Colors.white,
                         ),
                       ),
